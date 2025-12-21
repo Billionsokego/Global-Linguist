@@ -67,7 +67,7 @@ export const ConversationModal: React.FC<ConversationModalProps> = ({ isOpen, on
         processUserTurn(finalTranscript);
         liveTranscriber.resetTranscript(); // Clear it for the next turn
     }
-  }, [liveTranscriber.isRecording]);
+  }, [liveTranscriber.isRecording, liveTranscriber.transcript, liveTranscriber, processUserTurn]);
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -83,6 +83,13 @@ export const ConversationModal: React.FC<ConversationModalProps> = ({ isOpen, on
           liveTranscriber.startRecording();
       }
   };
+  
+  const handleClose = () => {
+      if (liveTranscriber.isRecording) {
+          liveTranscriber.stopRecording();
+      }
+      onClose();
+  }
 
   if (!isOpen) return null;
 
@@ -92,7 +99,7 @@ export const ConversationModal: React.FC<ConversationModalProps> = ({ isOpen, on
         <h2 className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">
           {sourceLang.name} → {targetLang.name}
         </h2>
-        <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-700 transition-colors">
+        <button onClick={handleClose} className="p-2 rounded-full hover:bg-gray-700 transition-colors">
           <CloseIcon />
         </button>
       </header>
@@ -127,7 +134,7 @@ export const ConversationModal: React.FC<ConversationModalProps> = ({ isOpen, on
         >
             <MicIcon isRecording={liveTranscriber.isRecording} isConnecting={liveTranscriber.isConnecting} isBotSpeaking={isBotSpeaking}/>
         </button>
-        <p className="text-gray-400 text-sm mt-3 h-5">
+        <p className="text-gray-400 text-sm mt-3 min-h-[1.25rem]">
             {liveTranscriber.isRecording ? 'Listening...' : (isBotSpeaking ? 'Speaking...' : 'Tap the mic to speak')}
         </p>
          {(error || liveTranscriber.error) && (

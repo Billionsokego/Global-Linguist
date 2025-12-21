@@ -25,3 +25,5 @@ export const ttsVoices: TTSVoice[] = [
   { name: 'Fenrir' },
   { name: 'Zephyr' },
 ];
+
+export const MAX_INPUT_LENGTH = 5000;

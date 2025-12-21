@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { LanguageSelector } from './components/LanguageSelector';
 import { TextInputPanel } from './components/TextInputPanel';
 import { LoadingSpinner } from './components/LoadingSpinner';
-import { languages, playbackSpeeds, ttsVoices } from './constants';
+import { languages, playbackSpeeds, ttsVoices, MAX_INPUT_LENGTH } from './constants';
 import { Language } from './types';
 import { translateText, textToSpeech, getPronunciationFeedback } from './services/geminiService';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
@@ -183,7 +183,7 @@ export default function App() {
 
   return (
     <>
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center p-4 sm:p-6 md:p-8 font-sans">
+    <div className="min-h-dvh bg-gray-900 text-white flex flex-col items-center p-4 sm:p-6 md:p-8 font-sans">
       <header className="w-full max-w-5xl text-center mb-8">
         <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">
           Global Linguist
@@ -214,6 +214,7 @@ export default function App() {
             isRecording={liveTranscriber.isRecording && !isVoiceOverActive}
             isTranscribing={liveTranscriber.isConnecting && !isVoiceOverActive}
             showMic
+            maxLength={MAX_INPUT_LENGTH}
           />
           <TextInputPanel
             id="target-text"
