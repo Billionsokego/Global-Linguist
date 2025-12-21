@@ -1,0 +1,93 @@
+
+import React, { useState, useMemo } from 'react';
+import { SavedSnippet } from '../types';
+import { CloseIcon, TrashIcon, UsePhraseIcon } from './icons';
+
+interface SnippetsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  snippets: SavedSnippet[];
+  onDelete: (id: number) => void;
+  onUse: (content: string) => void;
+  onAddNew: () => void;
+}
+
+export const SnippetsModal: React.FC<SnippetsModalProps> = ({ isOpen, onClose, snippets, onDelete, onUse, onAddNew }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredSnippets = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return snippets;
+    }
+    const lowercasedFilter = searchTerm.toLowerCase();
+    return snippets.filter(snippet =>
+      snippet.title.toLowerCase().includes(lowercasedFilter) ||
+      snippet.content.toLowerCase().includes(lowercasedFilter) ||
+      snippet.category.toLowerCase().includes(lowercasedFilter)
+    );
+  }, [snippets, searchTerm]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-gray-900/90 backdrop-blur-sm flex flex-col z-50 p-4 sm:p-6 md:p-8">
+      <div className="w-full max-w-2xl mx-auto bg-gray-800 rounded-xl border border-gray-700 flex flex-col h-full max-h-[90vh]">
+        <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700">
+          <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">
+            Snippets
+          </h2>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-700 transition-colors">
+            <CloseIcon />
+          </button>
+        </header>
+        
+        <div className="p-4 border-b border-gray-700 flex-shrink-0 flex flex-col sm:flex-row gap-4">
+             <input
+                type="text"
+                placeholder="Search snippets..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-purple-500"
+            />
+            <button onClick={onAddNew} className="px-4 py-2 bg-purple-600 rounded-lg font-semibold hover:bg-purple-700 transition-colors flex-shrink-0">
+                Create New
+            </button>
+        </div>
+
+        <main className="flex-grow p-4 overflow-y-auto">
+          {filteredSnippets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-16 h-16 mb-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z" />
+                </svg>
+                <h3 className="text-lg font-semibold">No Snippets Found</h3>
+                <p className="mt-1">{searchTerm ? 'Try a different search term.' : 'Click "Create New" to add your first snippet.'}</p>
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {filteredSnippets.map((snippet) => (
+                <li key={snippet.id} className="bg-gray-900/50 p-3 rounded-lg border border-gray-700/50">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-grow">
+                        <h4 className="font-bold text-white">{snippet.title}</h4>
+                        {snippet.category && <p className="text-xs text-purple-400 bg-purple-900/50 inline-block px-2 py-0.5 rounded-full mt-1">{snippet.category}</p>}
+                    </div>
+                     <div className="flex-shrink-0 flex items-center gap-1">
+                      <button onClick={() => onUse(snippet.content)} className="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Use snippet">
+                        <UsePhraseIcon/>
+                      </button>
+                      <button onClick={() => onDelete(snippet.id)} className="p-2 rounded-full hover:bg-red-900/50 text-red-400 transition-colors" aria-label="Delete snippet">
+                        <TrashIcon/>
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-300 mt-2 bg-gray-700/40 p-2 rounded-md whitespace-pre-wrap">{snippet.content}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+};

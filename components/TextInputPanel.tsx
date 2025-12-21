@@ -2,7 +2,7 @@
 import React from 'react';
 import { LoadingSpinner } from './LoadingSpinner';
 import { TTSVoice } from '../types';
-import { MicIcon, SpeakerIcon, PracticeIcon, CloseIcon, VoiceOverIcon } from './icons';
+import { MicIcon, SpeakerIcon, PracticeIcon, CloseIcon, VoiceOverIcon, BookmarkIcon, BookmarkSquareIcon } from './icons';
 
 interface TextInputPanelProps {
   id: string;
@@ -10,6 +10,7 @@ interface TextInputPanelProps {
   onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   placeholder: string;
   readOnly?: boolean;
+  isMirrored?: boolean;
   showMic?: boolean;
   isRecording?: boolean;
   isTranscribing?: boolean;
@@ -36,6 +37,10 @@ interface TextInputPanelProps {
   isVoiceOverActive?: boolean;
   isVoiceOverConnecting?: boolean;
   maxLength?: number;
+  showSaveButton?: boolean;
+  onSavePhrase?: () => void;
+  showSaveSnippetButton?: boolean;
+  onSaveSnippet?: (content: string) => void;
 }
 
 export const TextInputPanel: React.FC<TextInputPanelProps> = ({
@@ -44,6 +49,7 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
   onChange,
   placeholder,
   readOnly = false,
+  isMirrored = false,
   showMic = false,
   isRecording = false,
   isTranscribing = false,
@@ -70,8 +76,12 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
   isVoiceOverActive = false,
   isVoiceOverConnecting = false,
   maxLength,
+  showSaveButton = false,
+  onSavePhrase,
+  showSaveSnippetButton = false,
+  onSaveSnippet,
 }) => {
-  const hasControls = showMic || showSpeaker || showPractice || showVoiceOver || isPracticing;
+  const hasControls = showMic || showSpeaker || showPractice || showVoiceOver || isPracticing || showSaveButton || showSaveSnippetButton;
   const showControlBar = hasControls || (maxLength && !readOnly);
   const currentLength = value.length;
   const isNearingLimit = maxLength && currentLength > maxLength * 0.9;
@@ -87,7 +97,7 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
         placeholder={placeholder}
         readOnly={readOnly}
         maxLength={maxLength}
-        className="w-full flex-grow p-4 bg-transparent text-white placeholder-gray-500 focus:outline-none resize-none"
+        className={`w-full flex-grow p-4 bg-transparent placeholder-gray-500 focus:outline-none resize-none ${readOnly && isMirrored ? 'text-gray-400 italic' : 'text-white'}`}
       />
 
       {/* Container for feedback and controls */}
@@ -183,6 +193,18 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
                           <button onClick={onVoiceOverClick} disabled={isLoading || isRecording} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Instant Interpreter">
                                 {isVoiceOverConnecting ? <LoadingSpinner size="sm"/> : <VoiceOverIcon isActive={isVoiceOverActive}/>}
                             </button>
+                        )}
+                        
+                        {showSaveButton && onSavePhrase && (
+                           <button onClick={onSavePhrase} disabled={!value} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Save to phrasebook">
+                               <BookmarkIcon />
+                           </button>
+                        )}
+                        
+                        {showSaveSnippetButton && onSaveSnippet && (
+                           <button onClick={() => onSaveSnippet(value)} disabled={!value} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Save as snippet">
+                               <BookmarkSquareIcon />
+                           </button>
                         )}
 
                         {showPractice && onPracticeClick && (

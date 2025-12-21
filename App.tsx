@@ -4,13 +4,16 @@ import { LanguageSelector } from './components/LanguageSelector';
 import { TextInputPanel } from './components/TextInputPanel';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { languages, playbackSpeeds, ttsVoices, MAX_INPUT_LENGTH } from './constants';
-import { Language } from './types';
+import { Language, SavedPhrase, SavedSnippet } from './types';
 import { translateText, textToSpeech, getPronunciationFeedback } from './services/geminiService';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { useLiveTranscription } from './hooks/useLiveTranscription';
 import { audioUtils } from './utils/audioUtils';
 import { ConversationModal } from './components/ConversationModal';
-import { ArrowIcon, SwapIcon, ConversationIcon } from './components/icons';
+import { PhrasebookModal } from './components/PhrasebookModal';
+import { SnippetsModal } from './components/SnippetsModal';
+import { SaveSnippetModal } from './components/SaveSnippetModal';
+import { ArrowIcon, SwapIcon, ConversationIcon, BookOpenIcon, ClipboardDocumentListIcon } from './components/icons';
 
 export default function App() {
   const [sourceLang, setSourceLang] = useState<Language>(languages[0]); // Default: English
@@ -19,7 +22,13 @@ export default function App() {
   const [outputText, setOutputText] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Modal states
   const [isConversationMode, setIsConversationMode] = useState<boolean>(false);
+  const [isPhrasebookOpen, setIsPhrasebookOpen] = useState<boolean>(false);
+  const [isSnippetsModalOpen, setIsSnippetsModalOpen] = useState<boolean>(false);
+  const [snippetToSave, setSnippetToSave] = useState<{content: string} | null>(null);
+
 
   // Pronunciation Practice State
   const [isPracticing, setIsPracticing] = useState<boolean>(false);
@@ -34,13 +43,37 @@ export default function App() {
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [selectedVoice, setSelectedVoice] = useState<string>(ttsVoices[0].name);
 
+  // Phrasebook state
+  const [savedPhrases, setSavedPhrases] = useState<SavedPhrase[]>(() => {
+      const stored = localStorage.getItem('linguist-phrasebook');
+      return stored ? JSON.parse(stored) : [];
+  });
+  
+  // Snippet state
+  const [savedSnippets, setSavedSnippets] = useState<SavedSnippet[]>(() => {
+    const stored = localStorage.getItem('linguist-snippets');
+    return stored ? JSON.parse(stored) : [];
+  });
+
   // New state for Instant Interpreter mode
   const [isVoiceOverActive, setIsVoiceOverActive] = useState(false);
+
+  // Effect to save phrases to local storage whenever they change
+  useEffect(() => {
+    localStorage.setItem('linguist-phrasebook', JSON.stringify(savedPhrases));
+  }, [savedPhrases]);
+
+  // Effect to save snippets to local storage
+  useEffect(() => {
+    localStorage.setItem('linguist-snippets', JSON.stringify(savedSnippets));
+  }, [savedSnippets]);
+
 
   // Effect to update input text from any live transcription
   useEffect(() => {
     if (liveTranscriber.isRecording || liveTranscriber.isConnecting) {
       setInputText(liveTranscriber.transcript);
+      setOutputText(''); // Clear output to mirror transcription
     }
   }, [liveTranscriber.transcript, liveTranscriber.isRecording, liveTranscriber.isConnecting]);
 
@@ -50,6 +83,11 @@ export default function App() {
       localStorage.setItem('linguist-app-input', inputText);
     }
   }, [inputText, liveTranscriber.isRecording, liveTranscriber.isConnecting]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    setOutputText(''); // Clear previous translation to enable mirroring
+  };
 
   const handleTranslate = useCallback(async () => {
     if (!inputText.trim()) return;
@@ -99,6 +137,7 @@ export default function App() {
       liveTranscriber.stopRecording();
     } else {
       setInputText('');
+      setOutputText('');
       liveTranscriber.startRecording();
     }
   };
@@ -181,6 +220,54 @@ export default function App() {
     }
   };
 
+  // Phrasebook Handlers
+  const handleSavePhrase = () => {
+    if (!inputText.trim() || !outputText.trim()) return;
+    const newPhrase: SavedPhrase = {
+      id: Date.now(),
+      sourceText: inputText,
+      translatedText: outputText,
+      sourceLang: sourceLang,
+      targetLang: targetLang,
+    };
+    setSavedPhrases(prev => [newPhrase, ...prev]);
+  };
+
+  const handleDeletePhrase = (id: number) => {
+    setSavedPhrases(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleUsePhrase = (phrase: SavedPhrase) => {
+    setInputText(phrase.sourceText);
+    setOutputText(phrase.translatedText);
+    setSourceLang(phrase.sourceLang);
+    setTargetLang(phrase.targetLang);
+    setIsPhrasebookOpen(false);
+  };
+
+  // Snippet Handlers
+  const handleOpenSaveSnippetModal = (content: string) => {
+    setSnippetToSave({ content });
+  };
+
+  const handleSaveSnippet = (title: string, content: string, category: string) => {
+    const newSnippet: SavedSnippet = { id: Date.now(), title, content, category };
+    setSavedSnippets(prev => [newSnippet, ...prev]);
+    setSnippetToSave(null); // Close the modal
+    setIsSnippetsModalOpen(true); // Optionally open the main snippets modal
+  };
+
+  const handleDeleteSnippet = (id: number) => {
+    setSavedSnippets(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleUseSnippet = (content: string) => {
+    setInputText(content);
+    setOutputText(''); // Clear previous translation to mirror the new snippet
+    setIsSnippetsModalOpen(false);
+  };
+
+
   return (
     <>
     <div className="min-h-dvh bg-gray-900 text-white flex flex-col items-center p-4 sm:p-6 md:p-8 font-sans">
@@ -208,23 +295,26 @@ export default function App() {
           <TextInputPanel
             id="source-text"
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={handleInputChange}
             placeholder="Enter text or start speaking..."
             onMicClick={handleMicClick}
             isRecording={liveTranscriber.isRecording && !isVoiceOverActive}
             isTranscribing={liveTranscriber.isConnecting && !isVoiceOverActive}
             showMic
             maxLength={MAX_INPUT_LENGTH}
+            showSaveSnippetButton
+            onSaveSnippet={handleOpenSaveSnippetModal}
           />
           <TextInputPanel
             id="target-text"
-            value={outputText}
+            value={outputText || inputText}
+            isMirrored={!outputText && !!inputText}
             placeholder="Translation will appear here..."
-            onSpeakClick={() => handleSpeak(outputText)}
+            onSpeakClick={() => handleSpeak(outputText || inputText)}
             readOnly
             showSpeaker
             isLoading={isLoading}
-            showPractice={!isPracticing}
+            showPractice={!isPracticing && !!outputText}
             onPracticeClick={handlePracticeClick}
             onCancelPracticeClick={handleCancelPractice}
             isPracticing={isPracticing}
@@ -242,6 +332,10 @@ export default function App() {
             onVoiceOverClick={handleVoiceOverClick}
             isVoiceOverActive={liveTranscriber.isRecording && isVoiceOverActive}
             isVoiceOverConnecting={liveTranscriber.isConnecting && isVoiceOverActive}
+            showSaveButton={!!outputText}
+            onSavePhrase={handleSavePhrase}
+            showSaveSnippetButton
+            onSaveSnippet={handleOpenSaveSnippetModal}
           />
         </div>
 
@@ -260,6 +354,20 @@ export default function App() {
           >
             Start Conversation
             <ConversationIcon />
+          </button>
+           <button
+            onClick={() => setIsPhrasebookOpen(true)}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-700 rounded-lg font-semibold hover:bg-gray-600 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            Phrasebook
+            <BookOpenIcon />
+          </button>
+           <button
+            onClick={() => setIsSnippetsModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-700 rounded-lg font-semibold hover:bg-gray-600 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            Snippets
+            <ClipboardDocumentListIcon />
           </button>
         </div>
 
@@ -282,6 +390,34 @@ export default function App() {
         selectedVoice={selectedVoice}
         playbackSpeed={playbackSpeed}
       />
+    )}
+    {isPhrasebookOpen && (
+        <PhrasebookModal
+            isOpen={isPhrasebookOpen}
+            onClose={() => setIsPhrasebookOpen(false)}
+            phrases={savedPhrases}
+            onDelete={handleDeletePhrase}
+            onUse={handleUsePhrase}
+            onSpeak={handleSpeak}
+        />
+    )}
+    {isSnippetsModalOpen && (
+        <SnippetsModal
+            isOpen={isSnippetsModalOpen}
+            onClose={() => setIsSnippetsModalOpen(false)}
+            snippets={savedSnippets}
+            onDelete={handleDeleteSnippet}
+            onUse={handleUseSnippet}
+            onAddNew={() => handleOpenSaveSnippetModal('')}
+        />
+    )}
+    {snippetToSave !== null && (
+        <SaveSnippetModal
+            isOpen={snippetToSave !== null}
+            onClose={() => setSnippetToSave(null)}
+            onSave={handleSaveSnippet}
+            initialContent={snippetToSave.content}
+        />
     )}
     </>
   );
