@@ -5,8 +5,9 @@ import { TextInputPanel } from './components/TextInputPanel';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { languages } from './constants';
 import { Language } from './types';
-import { translateText, textToSpeech } from './services/geminiService';
+import { translateText, textToSpeech, getPronunciationFeedback } from './services/geminiService';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
+import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { audioUtils } from './utils/audioUtils';
 
 const ArrowIcon = () => (
@@ -25,12 +26,22 @@ const SwapIcon = () => (
 export default function App() {
   const [sourceLang, setSourceLang] = useState<Language>(languages[0]); // Default: English
   const [targetLang, setTargetLang] = useState<Language>(languages[5]); // Default: Spanish
-  const [inputText, setInputText] = useState<string>('');
+  const [inputText, setInputText] = useState<string>(() => localStorage.getItem('linguist-app-input') || '');
   const [outputText, setOutputText] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Pronunciation Practice State
+  const [isPracticing, setIsPracticing] = useState<boolean>(false);
+  const [practiceFeedback, setPracticeFeedback] = useState<string | null>(null);
+  const [isFetchingFeedback, setIsFetchingFeedback] = useState<boolean>(false);
+
   const { transcript, isListening, startListening, stopListening, resetTranscript } = useSpeechRecognition({ lang: sourceLang.code });
+  const { isRecording, startRecording, stopRecording } = useAudioRecorder();
+
+  useEffect(() => {
+    localStorage.setItem('linguist-app-input', inputText);
+  }, [inputText]);
 
   useEffect(() => {
     if (transcript) {
@@ -44,6 +55,10 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     setOutputText('');
+    
+    // Reset practice mode on new translation
+    setIsPracticing(false);
+    setPracticeFeedback(null);
 
     try {
       const translated = await translateText(inputText, sourceLang.name, targetLang.name);
@@ -77,6 +92,9 @@ export default function App() {
     setTargetLang(tempLang);
     setInputText(outputText);
     setOutputText(inputText);
+    // Reset practice mode on swap
+    setIsPracticing(false); 
+    setPracticeFeedback(null);
   };
 
   const handleMicClick = () => {
@@ -86,6 +104,43 @@ export default function App() {
         resetTranscript();
         setInputText('');
         startListening();
+    }
+  };
+
+  const handlePracticeClick = () => {
+    setIsPracticing(true);
+    setPracticeFeedback(null); // Clear previous feedback
+  };
+
+  const handleCancelPractice = () => {
+      if(isRecording) {
+          stopRecording(); // Stop recording if active
+      }
+      setIsPracticing(false);
+      setPracticeFeedback(null);
+  }
+
+  const handleRecordPracticeClick = async () => {
+    if (isRecording) {
+      setIsFetchingFeedback(true);
+      const audioBase64 = await stopRecording();
+      if (audioBase64 && outputText) {
+          try {
+            const feedback = await getPronunciationFeedback(outputText, targetLang.name, audioBase64);
+            setPracticeFeedback(feedback);
+          } catch (e) {
+            console.error(e);
+            setPracticeFeedback('Sorry, I couldn\'t analyze your pronunciation. Please try again.');
+          } finally {
+            setIsFetchingFeedback(false);
+          }
+      } else {
+        setIsFetchingFeedback(false);
+        // Do not show an error if recording was empty, user might have misclicked.
+      }
+    } else {
+      setPracticeFeedback(null); // Clear old feedback before new recording
+      startRecording();
     }
   };
 
@@ -129,6 +184,14 @@ export default function App() {
             readOnly
             showSpeaker
             isLoading={isLoading}
+            showPractice={!isPracticing}
+            onPracticeClick={handlePracticeClick}
+            onCancelPracticeClick={handleCancelPractice}
+            isPracticing={isPracticing}
+            isRecordingPractice={isRecording}
+            onRecordPracticeClick={handleRecordPracticeClick}
+            feedback={practiceFeedback}
+            isFetchingFeedback={isFetchingFeedback}
           />
         </div>
 

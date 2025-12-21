@@ -58,3 +58,36 @@ export const textToSpeech = async (text: string): Promise<string> => {
         throw new Error('Failed to generate speech with Gemini API.');
     }
 };
+
+export const getPronunciationFeedback = async (
+  phrase: string,
+  language: string,
+  audioBase64: string,
+): Promise<string> => {
+    try {
+        const audioPart = {
+            inlineData: {
+                mimeType: 'audio/webm',
+                data: audioBase64,
+            },
+        };
+
+        const textPart = {
+            text: `You are a friendly and encouraging language teacher. The user is practicing their pronunciation for the ${language} phrase: "${phrase}". Please listen to their recording and provide short, constructive feedback. Focus on clarity, rhythm, and any specific sounds they might be struggling with. Keep your feedback to 1-3 sentences.`
+        };
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: { parts: [textPart, audioPart] },
+        });
+
+        if (response.text) {
+            return response.text.trim();
+        }
+
+        throw new Error('No text in Gemini feedback response');
+    } catch (error) {
+        console.error('Gemini feedback error:', error);
+        throw new Error('Failed to get pronunciation feedback from Gemini API.');
+    }
+};
