@@ -1,0 +1,7 @@
+{
+  "name": "Global Linguist: AI Teacher & Interpreter",
+  "description": "An AI-powered language teacher and interpreter. Practice pronunciation, translate text or speech between dozens of languages, and hear translations spoken aloud. Your personal guide to mastering any language.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
