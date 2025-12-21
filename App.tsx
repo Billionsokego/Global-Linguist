@@ -3,10 +3,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { LanguageSelector } from './components/LanguageSelector';
 import { TextInputPanel } from './components/TextInputPanel';
 import { LoadingSpinner } from './components/LoadingSpinner';
-import { languages } from './constants';
+import { languages, playbackSpeeds, ttsVoices } from './constants';
 import { Language } from './types';
-import { translateText, textToSpeech, getPronunciationFeedback, transcribeAudio } from './services/geminiService';
+import { translateText, textToSpeech, getPronunciationFeedback } from './services/geminiService';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
+import { useLiveTranscription } from './hooks/useLiveTranscription';
 import { audioUtils } from './utils/audioUtils';
 
 const ArrowIcon = () => (
@@ -35,13 +36,28 @@ export default function App() {
   const [practiceFeedback, setPracticeFeedback] = useState<string | null>(null);
   const [isFetchingFeedback, setIsFetchingFeedback] = useState<boolean>(false);
 
-  // Audio Recording & Transcription State
-  const { isRecording, startRecording, stopRecording } = useAudioRecorder();
-  const [isTranscribing, setIsTranscribing] = useState(false);
+  // Use separate recorders for distinct functionalities
+  const practiceRecorder = useAudioRecorder();
+  const liveTranscriber = useLiveTranscription();
+  
+  // Playback speed state
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+  const [selectedVoice, setSelectedVoice] = useState<string>(ttsVoices[0].name);
 
+  // Effect to update input text from the live transcriber
   useEffect(() => {
-    localStorage.setItem('linguist-app-input', inputText);
-  }, [inputText]);
+    if (liveTranscriber.isRecording || liveTranscriber.isConnecting) {
+      setInputText(liveTranscriber.transcript);
+    }
+  }, [liveTranscriber.transcript, liveTranscriber.isRecording, liveTranscriber.isConnecting]);
+
+  // Effect to save final input text to local storage
+  useEffect(() => {
+    // Only save when not actively transcribing to avoid storing partial text
+    if (!liveTranscriber.isRecording && !liveTranscriber.isConnecting) {
+      localStorage.setItem('linguist-app-input', inputText);
+    }
+  }, [inputText, liveTranscriber.isRecording, liveTranscriber.isConnecting]);
 
   const handleTranslate = useCallback(async () => {
     if (!inputText.trim()) return;
@@ -70,15 +86,15 @@ export default function App() {
       setIsLoading(true);
       setError(null);
       try {
-        const audioData = await textToSpeech(outputText);
-        await audioUtils.playAudio(audioData);
+        const audioData = await textToSpeech(outputText, selectedVoice);
+        await audioUtils.playAudio(audioData, playbackSpeed);
       } catch (e) {
           console.error(e);
           setError("Failed to generate audio. Please try again.");
       } finally {
           setIsLoading(false);
       }
-  }, [outputText]);
+  }, [outputText, playbackSpeed, selectedVoice]);
 
   const handleSwapLanguages = () => {
     const tempLang = sourceLang;
@@ -92,26 +108,11 @@ export default function App() {
   };
 
   const handleMicClick = async () => {
-    if (isRecording) {
-      setIsTranscribing(true);
-      setError(null);
-      const audioBase64 = await stopRecording();
-      if (audioBase64) {
-        try {
-          const transcribedText = await transcribeAudio(audioBase64, sourceLang.name);
-          setInputText(transcribedText);
-        } catch (e) {
-          console.error(e);
-          setError('Failed to transcribe audio. Please try again.');
-        } finally {
-          setIsTranscribing(false);
-        }
-      } else {
-        setIsTranscribing(false);
-      }
+    if (liveTranscriber.isRecording || liveTranscriber.isConnecting) {
+      liveTranscriber.stopRecording();
     } else {
       setInputText(''); // Clear previous text
-      startRecording();
+      liveTranscriber.startRecording();
     }
   };
 
@@ -121,17 +122,17 @@ export default function App() {
   };
 
   const handleCancelPractice = () => {
-      if(isRecording) {
-          stopRecording(); // Stop recording if active
+      if(practiceRecorder.isRecording) {
+          practiceRecorder.stopRecording(); // Stop recording if active
       }
       setIsPracticing(false);
       setPracticeFeedback(null);
   }
 
   const handleRecordPracticeClick = async () => {
-    if (isRecording) {
+    if (practiceRecorder.isRecording) {
       setIsFetchingFeedback(true);
-      const audioBase64 = await stopRecording();
+      const audioBase64 = await practiceRecorder.stopRecording();
       if (audioBase64 && outputText) {
           try {
             const feedback = await getPronunciationFeedback(outputText, targetLang.name, audioBase64);
@@ -148,7 +149,7 @@ export default function App() {
       }
     } else {
       setPracticeFeedback(null); // Clear old feedback before new recording
-      startRecording();
+      practiceRecorder.startRecording();
     }
   };
 
@@ -179,10 +180,10 @@ export default function App() {
             id="source-text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder={`Enter text in ${sourceLang.name}...`}
+            placeholder="Enter text or start speaking..."
             onMicClick={handleMicClick}
-            isRecording={isRecording}
-            isTranscribing={isTranscribing}
+            isRecording={liveTranscriber.isRecording}
+            isTranscribing={liveTranscriber.isConnecting}
             showMic
           />
           <TextInputPanel
@@ -197,10 +198,16 @@ export default function App() {
             onPracticeClick={handlePracticeClick}
             onCancelPracticeClick={handleCancelPractice}
             isPracticing={isPracticing}
-            isRecordingPractice={isRecording}
+            isRecordingPractice={practiceRecorder.isRecording}
             onRecordPracticeClick={handleRecordPracticeClick}
             feedback={practiceFeedback}
             isFetchingFeedback={isFetchingFeedback}
+            playbackSpeed={playbackSpeed}
+            onPlaybackSpeedChange={setPlaybackSpeed}
+            playbackSpeeds={playbackSpeeds}
+            voices={ttsVoices}
+            selectedVoice={selectedVoice}
+            onVoiceChange={setSelectedVoice}
           />
         </div>
 
@@ -215,9 +222,9 @@ export default function App() {
           </button>
         </div>
 
-        {error && (
+        {(error || liveTranscriber.error) && (
             <div className="mt-4 text-center bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg">
-                <p>{error}</p>
+                <p>{error || liveTranscriber.error}</p>
             </div>
         )}
       </main>

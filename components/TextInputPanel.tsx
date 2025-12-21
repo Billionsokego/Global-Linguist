@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { LoadingSpinner } from './LoadingSpinner';
+import { TTSVoice } from '../types';
 
 interface TextInputPanelProps {
   id: string;
@@ -23,11 +24,19 @@ interface TextInputPanelProps {
   onRecordPracticeClick?: () => void;
   feedback?: string | null;
   isFetchingFeedback?: boolean;
+  playbackSpeed?: number;
+  onPlaybackSpeedChange?: (speed: number) => void;
+  playbackSpeeds?: number[];
+  voices?: TTSVoice[];
+  selectedVoice?: string;
+  onVoiceChange?: (voiceName: string) => void;
 }
 
 const MicIcon = ({ isRecording }: { isRecording: boolean }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-6 h-6 transition-colors ${isRecording ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-white'}`}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m12 0v-1.5a6 6 0 0 0-12 0v1.5m12 0v-1.5a6 6 0 0 0-12 0v1.5m0-6.75A.75.75 0 0 1 6 6h12a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-.75.75H6a.75.75 0 0 1-.75-.75V6.75Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16 6v8a4 4 0 0 1-8 0V6a4 4 0 0 1 8 0Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v3" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10 21h4" />
     </svg>
 );
 
@@ -70,6 +79,12 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
   onRecordPracticeClick,
   feedback = null,
   isFetchingFeedback = false,
+  playbackSpeed = 1,
+  onPlaybackSpeedChange,
+  playbackSpeeds = [0.75, 1, 1.25],
+  voices = [],
+  selectedVoice,
+  onVoiceChange
 }) => {
   return (
     <div className="relative w-full h-64 bg-gray-800 rounded-lg border border-gray-700 flex flex-col">
@@ -121,9 +136,38 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
         ) : (
             <>
                 {showSpeaker && (
-                  <button onClick={onSpeakClick} disabled={isLoading || !value} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Speak translation">
-                    {isLoading ? <LoadingSpinner size="sm"/> : <SpeakerIcon />}
-                  </button>
+                  <div className="flex items-center gap-2 bg-gray-700/50 rounded-full p-1">
+                    {voices.length > 0 && onVoiceChange && (
+                      <select
+                        value={selectedVoice}
+                        onChange={(e) => onVoiceChange(e.target.value)}
+                        className="text-xs bg-gray-700 text-white rounded-full focus:ring-2 focus:ring-purple-500 focus:outline-none py-1 pl-2 pr-6"
+                        aria-label="Select voice"
+                      >
+                        {voices.map(voice => (
+                          <option key={voice.name} value={voice.name}>{voice.name}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    <div className="flex items-center gap-1 bg-gray-700 rounded-full">
+                        {playbackSpeeds.map((speed) => (
+                            <button
+                                key={speed}
+                                onClick={() => onPlaybackSpeedChange && onPlaybackSpeedChange(speed)}
+                                className={`px-2 py-0.5 text-xs rounded-full transition-colors ${
+                                    playbackSpeed === speed ? 'bg-purple-600 text-white' : 'text-gray-300 hover:bg-gray-600'
+                                }`}
+                                aria-pressed={playbackSpeed === speed}
+                            >
+                                {speed}x
+                            </button>
+                        ))}
+                    </div>
+                    <button onClick={onSpeakClick} disabled={isLoading || !value} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Speak translation">
+                      {isLoading ? <LoadingSpinner size="sm"/> : <SpeakerIcon />}
+                    </button>
+                  </div>
                 )}
                 {showPractice && onPracticeClick && (
                    <button onClick={onPracticeClick} disabled={isLoading || !value} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Practice pronunciation">

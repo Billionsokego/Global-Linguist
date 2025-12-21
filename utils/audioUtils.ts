@@ -41,14 +41,15 @@ const decodeAudioData = async (
     return buffer;
 };
 
-// Plays the given base64 encoded audio string
-const playAudio = async (base64Audio: string): Promise<void> => {
+// Plays the given base64 encoded audio string at a specified speed
+const playAudio = async (base64Audio: string, speed: number = 1): Promise<void> => {
     const ctx = getAudioContext();
     const decodedBytes = decode(base64Audio);
     const audioBuffer = await decodeAudioData(decodedBytes, ctx, 24000, 1);
     
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
+    source.playbackRate.value = speed;
     source.connect(ctx.destination);
     source.start();
 };

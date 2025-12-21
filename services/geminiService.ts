@@ -32,7 +32,7 @@ export const translateText = async (
   }
 };
 
-export const textToSpeech = async (text: string): Promise<string> => {
+export const textToSpeech = async (text: string, voiceName: string): Promise<string> => {
     try {
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
@@ -41,7 +41,7 @@ export const textToSpeech = async (text: string): Promise<string> => {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: {
                     voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName: 'Kore' },
+                        prebuiltVoiceConfig: { voiceName: voiceName },
                     },
                 },
             },
@@ -73,7 +73,19 @@ export const getPronunciationFeedback = async (
         };
 
         const textPart = {
-            text: `You are a friendly and encouraging language teacher. The user is practicing their pronunciation for the ${language} phrase: "${phrase}". Please listen to their recording and provide short, constructive feedback. Focus on clarity, rhythm, and any specific sounds they might be struggling with. Keep your feedback to 1-3 sentences.`
+            text: `You are an expert ${language} pronunciation coach. The user is practicing the phrase: "${phrase}".
+Analyze their pronunciation from the provided audio recording and give specific, constructive feedback.
+
+Your feedback must:
+1. Start with a positive and encouraging remark.
+2. Pinpoint specific words or phonemes (sounds) that were mispronounced.
+3. Describe the error simply (e.g., "the 'a' sound was a bit too open" or "the stress on 'palabra' was on the wrong syllable").
+4. Provide a clear, actionable suggestion for how to correct it (e.g., "Try making your mouth wider for the 'a' sound, like in the word 'cat'" or "The stress should be on the second syllable: pa-LA-bra").
+5. Keep the total feedback concise, around 2-4 sentences.
+
+Example Feedback (for Spanish 'perro'): "Great attempt! The 'rr' sound was a little soft. Try tapping the tip of your tongue against the roof of your mouth multiple times to get that classic Spanish trill. You've got the rest of it down perfectly!"
+
+Do not just say "good job" or "it was unclear". Be specific and helpful.`
         };
 
         const response = await ai.models.generateContent({
@@ -89,37 +101,5 @@ export const getPronunciationFeedback = async (
     } catch (error) {
         console.error('Gemini feedback error:', error);
         throw new Error('Failed to get pronunciation feedback from Gemini API.');
-    }
-};
-
-export const transcribeAudio = async (
-    audioBase64: string,
-    language: string,
-): Promise<string> => {
-    try {
-        const audioPart = {
-            inlineData: {
-                mimeType: 'audio/webm',
-                data: audioBase64,
-            },
-        };
-
-        const textPart = {
-            text: `Transcribe the following audio recording. The speaker is speaking in ${language}. Provide only the raw text of the transcription, without any introductory phrases like "The transcription is:".`
-        };
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: { parts: [textPart, audioPart] },
-        });
-
-        if (response.text) {
-            return response.text.trim();
-        }
-
-        throw new Error('No text in Gemini transcription response');
-    } catch (error) {
-        console.error('Gemini transcription error:', error);
-        throw new Error('Failed to transcribe audio with Gemini API.');
     }
 };
