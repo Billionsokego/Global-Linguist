@@ -5,6 +5,7 @@ import { useLiveTranscription } from '../hooks/useLiveTranscription';
 import { translateText, textToSpeech } from '../services/geminiService';
 import { audioUtils } from '../utils/audioUtils';
 import { LoadingSpinner } from './LoadingSpinner';
+import { languages } from '../constants';
 
 interface ConversationModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ const MicIcon = ({ isRecording, isConnecting, isBotSpeaking }: { isRecording: bo
 
 export const ConversationModal: React.FC<ConversationModalProps> = ({ isOpen, onClose, sourceLang, targetLang, selectedVoice, playbackSpeed }) => {
   const [conversation, setConversation] = useState<ConversationTurn[]>([]);
+  const [currentSourceLang, setCurrentSourceLang] = useState<Language>(sourceLang);
   const [isBotSpeaking, setIsBotSpeaking] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const liveTranscriber = useLiveTranscription();
@@ -42,23 +44,46 @@ export const ConversationModal: React.FC<ConversationModalProps> = ({ isOpen, on
       if (!text.trim()) return;
       
       setError(null);
-      setConversation(prev => [...prev, { speaker: 'user', text, lang: sourceLang.name }]);
+      // Add user turn immediately with current language name (or "Auto-detect")
+      setConversation(prev => [...prev, { speaker: 'user', text, lang: currentSourceLang.name }]);
       setIsBotSpeaking(true);
       
       try {
-        const translatedText = await translateText(text, sourceLang.name, targetLang.name);
+        const { translatedText, detectedSourceLanguage } = await translateText(text, currentSourceLang.name, targetLang.name);
+        
+        let finalSourceLang = currentSourceLang;
+        // If language was detected, update the state for subsequent turns
+        if (detectedSourceLanguage) {
+            const detectedLangObj = languages.find(lang => lang.name.toLowerCase() === detectedSourceLanguage.toLowerCase());
+            if (detectedLangObj) {
+                setCurrentSourceLang(detectedLangObj);
+                finalSourceLang = detectedLangObj;
+
+                // Update the last user turn with the detected language name
+                setConversation(prev => {
+                    const newConv = [...prev];
+                    const lastTurn = newConv[newConv.length - 1];
+                    if (lastTurn && lastTurn.speaker === 'user') {
+                        lastTurn.lang = finalSourceLang.name;
+                    }
+                    return newConv;
+                });
+            }
+        }
+
         setConversation(prev => [...prev, { speaker: 'bot', text: translatedText, lang: targetLang.name }]);
         const audioData = await textToSpeech(translatedText, selectedVoice);
         await audioUtils.playAudio(audioData, playbackSpeed);
-      } catch (e) {
+      } catch (e: any) {
           console.error(e);
-          setError('Sorry, an error occurred. Please try again.');
-          setConversation(prev => [...prev, { speaker: 'bot', text: 'Error: Could not process audio.', lang: targetLang.name }]);
+          const errorMessage = e.message || 'Sorry, an error occurred. Please try again.';
+          setError(errorMessage);
+          setConversation(prev => [...prev, { speaker: 'bot', text: `Error: ${errorMessage}`, lang: targetLang.name }]);
       } finally {
           setIsBotSpeaking(false);
       }
 
-  }, [sourceLang, targetLang, selectedVoice, playbackSpeed]);
+  }, [currentSourceLang, targetLang, selectedVoice, playbackSpeed]);
   
   // This effect triggers when a recording session ends
   useEffect(() => {
@@ -97,7 +122,7 @@ export const ConversationModal: React.FC<ConversationModalProps> = ({ isOpen, on
     <div className="fixed inset-0 bg-gray-900/90 backdrop-blur-sm flex flex-col z-50">
       <header className="flex-shrink-0 flex items-center justify-between p-4 bg-gray-900 border-b border-gray-700">
         <h2 className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">
-          {sourceLang.name} → {targetLang.name}
+          {currentSourceLang.name} → {targetLang.name}
         </h2>
         <button onClick={handleClose} className="p-2 rounded-full hover:bg-gray-700 transition-colors">
           <CloseIcon />

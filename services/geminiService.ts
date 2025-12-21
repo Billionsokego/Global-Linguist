@@ -8,13 +8,49 @@ if (!API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
+const detectLanguage = async (text: string): Promise<string> => {
+  try {
+    const prompt = `Identify the language of the following text. Respond with only the name of the language in English (e.g., "English", "Spanish", "French"). Do not add any other words, explanations, or punctuation.\n\nText: "${text}"`;
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+    });
+
+    if (response.text) {
+      // Gemini might add a period at the end.
+      return response.text.trim().replace('.', '');
+    }
+    
+    throw new Error('Could not detect language from Gemini response.');
+  } catch (error) {
+    console.error('Gemini language detection error:', error);
+    throw new Error('Failed to detect language with Gemini API.');
+  }
+};
+
 export const translateText = async (
   text: string,
   sourceLang: string,
   targetLang: string
-): Promise<string> => {
+): Promise<{ translatedText: string, detectedSourceLanguage: string | null }> => {
+  let actualSourceLang = sourceLang;
+  let detectedSourceLanguage: string | null = null;
+
+  if (sourceLang === 'Auto-detect') {
+    if (!text.trim()) {
+      return { translatedText: '', detectedSourceLanguage: null };
+    }
+    try {
+      detectedSourceLanguage = await detectLanguage(text);
+      actualSourceLang = detectedSourceLanguage;
+    } catch (error) {
+       console.error('Auto-detection failed:', error);
+       throw new Error('Could not auto-detect the language. Please select it manually.');
+    }
+  }
+
   try {
-    const prompt = `Translate the following text from ${sourceLang} to ${targetLang}. Do not add any extra explanations, comments, or annotations. Just provide the raw translated text.\n\nText: "${text}"`;
+    const prompt = `Translate the following text from ${actualSourceLang} to ${targetLang}. Do not add any extra explanations, comments, or annotations. Just provide the raw translated text.\n\nText: "${text}"`;
     
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -22,7 +58,7 @@ export const translateText = async (
     });
 
     if (response.text) {
-        return response.text.trim();
+        return { translatedText: response.text.trim(), detectedSourceLanguage };
     }
     
     throw new Error('No text in Gemini response');

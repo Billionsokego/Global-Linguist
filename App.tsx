@@ -16,8 +16,8 @@ import { SaveSnippetModal } from './components/SaveSnippetModal';
 import { ArrowIcon, SwapIcon, ConversationIcon, BookOpenIcon, ClipboardDocumentListIcon } from './components/icons';
 
 export default function App() {
-  const [sourceLang, setSourceLang] = useState<Language>(languages[0]); // Default: English
-  const [targetLang, setTargetLang] = useState<Language>(languages[5]); // Default: Spanish
+  const [sourceLang, setSourceLang] = useState<Language>(languages[0]); // Default: Auto-detect
+  const [targetLang, setTargetLang] = useState<Language>(languages[6]); // Default: Spanish
   const [inputText, setInputText] = useState<string>(() => localStorage.getItem('linguist-app-input') || '');
   const [outputText, setOutputText] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -111,17 +111,24 @@ export default function App() {
     setIsPracticing(false);
     setPracticeFeedback(null);
     try {
-      const translated = await translateText(inputText, sourceLang.name, targetLang.name);
+      const { translatedText, detectedSourceLanguage } = await translateText(inputText, sourceLang.name, targetLang.name);
       
+      if (detectedSourceLanguage) {
+        const detectedLangObj = languages.find(lang => lang.name.toLowerCase() === detectedSourceLanguage.toLowerCase());
+        if (detectedLangObj) {
+            setSourceLang(detectedLangObj);
+        }
+      }
+
       // Only update the UI if this is the most recent request.
       if (latestRequest.current === requestId) {
-        setOutputText(translated);
+        setOutputText(translatedText);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       // Only show an error if it corresponds to the latest request.
       if (latestRequest.current === requestId) {
-        setError('Failed to translate. Please try again.');
+        setError(e.message || 'Failed to translate. Please try again.');
       }
     } finally {
       // Only turn off the loading spinner if this is the latest request.
@@ -167,8 +174,19 @@ export default function App() {
   }, [playbackSpeed, selectedVoice]);
 
   const handleSwapLanguages = () => {
-    setSourceLang(targetLang);
-    setTargetLang(sourceLang);
+    // Cannot swap if source is auto-detect and there's no output text
+    if (sourceLang.code === 'auto' && !outputText) return;
+    
+    const newSource = targetLang;
+    // If source was 'Auto-detect', it becomes the language of the previous output.
+    // We find that from `outputText` which was translated *from* the original source.
+    // This is tricky. A simpler swap is just to swap the langs and the text.
+    // If sourceLang is 'auto', it should become what the targetLang is.
+    const newTarget = sourceLang.code === 'auto' ? languages.find(l => l.name === targetLang.name) : sourceLang;
+
+
+    setSourceLang(newSource);
+    setTargetLang(newTarget || languages[0]); // fallback to auto-detect if something goes wrong
     setInputText(outputText);
     setOutputText(inputText);
     setIsPracticing(false); 
@@ -209,12 +227,20 @@ export default function App() {
       setIsLoading(true);
       setError(null);
       try {
-        const translatedText = await translateText(finalTranscript, sourceLang.name, targetLang.name);
+        const { translatedText, detectedSourceLanguage } = await translateText(finalTranscript, sourceLang.name, targetLang.name);
+        
+        if (detectedSourceLanguage) {
+            const detectedLangObj = languages.find(lang => lang.name.toLowerCase() === detectedSourceLanguage.toLowerCase());
+            if (detectedLangObj) {
+                setSourceLang(detectedLangObj);
+            }
+        }
+
         setOutputText(translatedText);
         await handleSpeak(translatedText);
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
-        setError("Voice-over failed. Please try again.");
+        setError(e.message || "Voice-over failed. Please try again.");
       } finally {
         setIsLoading(false);
         liveTranscriber.resetTranscript();
@@ -266,7 +292,7 @@ export default function App() {
 
   // Phrasebook Handlers
   const handleSavePhrase = () => {
-    if (!inputText.trim() || !outputText.trim()) return;
+    if (!inputText.trim() || !outputText.trim() || sourceLang.code === 'auto') return;
     const newPhrase: SavedPhrase = {
       id: Date.now(),
       sourceText: inputText,
@@ -327,7 +353,8 @@ export default function App() {
           <LanguageSelector selectedLang={sourceLang} onSelect={setSourceLang} />
           <button 
             onClick={handleSwapLanguages} 
-            className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors duration-200"
+            disabled={sourceLang.code === 'auto' && !outputText}
+            className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Swap languages"
           >
             <SwapIcon/>
@@ -378,7 +405,7 @@ export default function App() {
             onVoiceOverClick={handleVoiceOverClick}
             isVoiceOverActive={liveTranscriber.isRecording && isVoiceOverActive}
             isVoiceOverConnecting={liveTranscriber.isConnecting && isVoiceOverActive}
-            showSaveButton={!!outputText}
+            showSaveButton={!!outputText && sourceLang.code !== 'auto'}
             onSavePhrase={handleSavePhrase}
             showSaveSnippetButton
             onSaveSnippet={handleOpenSaveSnippetModal}

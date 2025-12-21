@@ -2,6 +2,7 @@
 import { Language, TTSVoice } from './types';
 
 export const languages: Language[] = [
+  { code: 'auto', name: 'Auto-detect' },
   { code: 'en-US', name: 'English' },
   { code: 'fr-FR', name: 'French' },
   { code: 'de-DE', name: 'German' },
