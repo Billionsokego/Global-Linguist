@@ -1,8 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { LoadingSpinner } from './LoadingSpinner';
 import { TTSVoice } from '../types';
-import { MicIcon, SpeakerIcon, PracticeIcon, CloseIcon, VoiceOverIcon, BookmarkIcon, BookmarkSquareIcon } from './icons';
+import { MicIcon, SpeakerIcon, PracticeIcon, CloseIcon, VoiceOverIcon, BookmarkIcon, BookmarkSquareIcon, ClipboardIcon, CheckIcon } from './icons';
 
 interface TextInputPanelProps {
   id: string;
@@ -41,6 +41,7 @@ interface TextInputPanelProps {
   onSavePhrase?: () => void;
   showSaveSnippetButton?: boolean;
   onSaveSnippet?: (content: string) => void;
+  showCopyButton?: boolean;
 }
 
 export const TextInputPanel: React.FC<TextInputPanelProps> = ({
@@ -80,12 +81,24 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
   onSavePhrase,
   showSaveSnippetButton = false,
   onSaveSnippet,
+  showCopyButton = false,
 }) => {
-  const hasControls = showMic || showSpeaker || showPractice || showVoiceOver || isPracticing || showSaveButton || showSaveSnippetButton;
+  const [isCopied, setIsCopied] = useState(false);
+  const hasControls = showMic || showSpeaker || showPractice || showVoiceOver || isPracticing || showSaveButton || showSaveSnippetButton || showCopyButton;
   const showControlBar = hasControls || (maxLength && !readOnly);
   const currentLength = value.length;
   const isNearingLimit = maxLength && currentLength > maxLength * 0.9;
   const isOverLimit = maxLength && currentLength > maxLength;
+
+  const handleCopy = () => {
+    if (!value) return;
+    navigator.clipboard.writeText(value).then(() => {
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+    });
+  };
 
 
   return (
@@ -97,7 +110,7 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
         placeholder={placeholder}
         readOnly={readOnly}
         maxLength={maxLength}
-        className={`w-full flex-grow p-4 bg-transparent placeholder-gray-500 focus:outline-none resize-none ${readOnly && isMirrored ? 'text-gray-400 italic' : 'text-white'}`}
+        className={`w-full flex-grow p-4 bg-transparent placeholder-gray-500 focus:outline-none resize-none ${readOnly && isMirrored ? 'text-white/70 italic' : 'text-white'}`}
       />
 
       {/* Container for feedback and controls */}
@@ -195,6 +208,12 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
                             </button>
                         )}
                         
+                        {showCopyButton && (
+                           <button onClick={handleCopy} disabled={!value} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Copy text">
+                               {isCopied ? <CheckIcon /> : <ClipboardIcon />}
+                           </button>
+                        )}
+
                         {showSaveButton && onSavePhrase && (
                            <button onClick={onSavePhrase} disabled={!value} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Save to phrasebook">
                                <BookmarkIcon />

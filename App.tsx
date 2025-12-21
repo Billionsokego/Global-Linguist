@@ -304,6 +304,7 @@ export default function App() {
             maxLength={MAX_INPUT_LENGTH}
             showSaveSnippetButton
             onSaveSnippet={handleOpenSaveSnippetModal}
+            showCopyButton
           />
           <TextInputPanel
             id="target-text"
@@ -336,6 +337,7 @@ export default function App() {
             onSavePhrase={handleSavePhrase}
             showSaveSnippetButton
             onSaveSnippet={handleOpenSaveSnippetModal}
+            showCopyButton
           />
         </div>
 
