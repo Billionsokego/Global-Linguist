@@ -46,14 +46,28 @@ export const useLiveTranscription = () => {
     
     // Use a ref to accumulate the full transcript to avoid issues with state closures
     const fullTranscriptRef = useRef('');
+    const isStoppingRef = useRef(false);
 
     const stopRecording = useCallback(async () => {
+        if (isStoppingRef.current) return;
         if (!isRecording && !isConnecting) return;
         
+        isStoppingRef.current = true;
         setIsRecording(false);
         setIsConnecting(false);
 
-        // Disconnect the audio processing nodes
+        // 1. Close Gemini session, which might trigger onclose
+        if (sessionPromiseRef.current) {
+            try {
+                const session = await sessionPromiseRef.current;
+                session.close();
+            } catch (e) {
+                console.warn("Error closing live session:", e);
+            }
+            sessionPromiseRef.current = null;
+        }
+
+        // 2. Disconnect audio nodes
         try {
              if (scriptProcessorRef.current) {
                 scriptProcessorRef.current.disconnect();
@@ -67,26 +81,17 @@ export const useLiveTranscription = () => {
             console.warn("Error disconnecting audio nodes:", e);
         }
 
-        // Stop the microphone tracks
+        // 3. Stop microphone tracks
         streamRef.current?.getTracks().forEach(track => track.stop());
         streamRef.current = null;
         
-        // Close the audio context
+        // 4. Close the audio context
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-           await audioContextRef.current.close();
+           await audioContextRef.current.close().catch(e => console.warn("Error closing audio context", e));
            audioContextRef.current = null;
         }
-
-        // Close the Gemini session
-        if (sessionPromiseRef.current) {
-            try {
-                const session = await sessionPromiseRef.current;
-                session.close();
-            } catch (e) {
-                console.warn("Error closing live session:", e);
-            }
-            sessionPromiseRef.current = null;
-        }
+        
+        isStoppingRef.current = false;
 
     }, [isRecording, isConnecting]);
 
@@ -106,7 +111,12 @@ export const useLiveTranscription = () => {
             }
             const ai = aiRef.current;
             
-            streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // FIX: Request a specific sample rate to avoid conflicts with the AudioContext.
+            streamRef.current = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    sampleRate: 16000
+                } 
+            });
 
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
             const audioContext = audioContextRef.current;
@@ -146,9 +156,10 @@ export const useLiveTranscription = () => {
                         stopRecording();
                     },
                     onclose: (e) => {
-                        if (isRecording) {
-                             stopRecording();
-                        }
+                        // The stopRecording function will handle cleanup.
+                        // We just need to ensure the state reflects it's no longer recording.
+                        setIsRecording(false);
+                        setIsConnecting(false);
                     },
                 },
                 config: {
@@ -167,12 +178,17 @@ export const useLiveTranscription = () => {
 
         } catch (err) {
             console.error('Failed to start recording:', err);
-            setError('Could not access the microphone.');
+            setError('Could not access the microphone. Please ensure permissions are granted.');
             setIsConnecting(false);
             setIsRecording(false);
         }
     }, [isRecording, isConnecting, stopRecording]);
     
+    const resetTranscript = useCallback(() => {
+        fullTranscriptRef.current = '';
+        setTranscript('');
+    }, []);
+
     // Cleanup effect to stop recording if the component unmounts
     useEffect(() => {
         return () => {
@@ -182,5 +198,5 @@ export const useLiveTranscription = () => {
         };
     }, [isRecording, isConnecting, stopRecording]);
 
-    return { isRecording, isConnecting, transcript, error, startRecording, stopRecording };
+    return { isRecording, isConnecting, transcript, error, startRecording, stopRecording, resetTranscript };
 };

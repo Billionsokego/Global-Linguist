@@ -7,3 +7,9 @@ export interface Language {
 export interface TTSVoice {
   name: string;
 }
+
+export interface ConversationTurn {
+  speaker: 'user' | 'bot';
+  text: string;
+  lang: string;
+}

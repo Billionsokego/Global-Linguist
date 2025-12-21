@@ -9,19 +9,8 @@ import { translateText, textToSpeech, getPronunciationFeedback } from './service
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { useLiveTranscription } from './hooks/useLiveTranscription';
 import { audioUtils } from './utils/audioUtils';
-
-const ArrowIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-gray-400">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
-  </svg>
-);
-
-const SwapIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-    </svg>
-);
-
+import { ConversationModal } from './components/ConversationModal';
+import { ArrowIcon, SwapIcon, ConversationIcon } from './components/icons';
 
 export default function App() {
   const [sourceLang, setSourceLang] = useState<Language>(languages[0]); // Default: English
@@ -30,21 +19,25 @@ export default function App() {
   const [outputText, setOutputText] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isConversationMode, setIsConversationMode] = useState<boolean>(false);
 
   // Pronunciation Practice State
   const [isPracticing, setIsPracticing] = useState<boolean>(false);
   const [practiceFeedback, setPracticeFeedback] = useState<string | null>(null);
   const [isFetchingFeedback, setIsFetchingFeedback] = useState<boolean>(false);
 
-  // Use separate recorders for distinct functionalities
+  // Recorders and Transcriber
   const practiceRecorder = useAudioRecorder();
   const liveTranscriber = useLiveTranscription();
   
-  // Playback speed state
+  // Playback & Voice State
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [selectedVoice, setSelectedVoice] = useState<string>(ttsVoices[0].name);
 
-  // Effect to update input text from the live transcriber
+  // New state for Instant Interpreter mode
+  const [isVoiceOverActive, setIsVoiceOverActive] = useState(false);
+
+  // Effect to update input text from any live transcription
   useEffect(() => {
     if (liveTranscriber.isRecording || liveTranscriber.isConnecting) {
       setInputText(liveTranscriber.transcript);
@@ -53,7 +46,6 @@ export default function App() {
 
   // Effect to save final input text to local storage
   useEffect(() => {
-    // Only save when not actively transcribing to avoid storing partial text
     if (!liveTranscriber.isRecording && !liveTranscriber.isConnecting) {
       localStorage.setItem('linguist-app-input', inputText);
     }
@@ -61,15 +53,11 @@ export default function App() {
 
   const handleTranslate = useCallback(async () => {
     if (!inputText.trim()) return;
-
     setIsLoading(true);
     setError(null);
     setOutputText('');
-    
-    // Reset practice mode on new translation
     setIsPracticing(false);
     setPracticeFeedback(null);
-
     try {
       const translated = await translateText(inputText, sourceLang.name, targetLang.name);
       setOutputText(translated);
@@ -81,12 +69,12 @@ export default function App() {
     }
   }, [inputText, sourceLang, targetLang]);
   
-  const handleSpeak = useCallback(async () => {
-      if (!outputText.trim()) return;
+  const handleSpeak = useCallback(async (textToSpeak: string) => {
+      if (!textToSpeak.trim()) return;
       setIsLoading(true);
       setError(null);
       try {
-        const audioData = await textToSpeech(outputText, selectedVoice);
+        const audioData = await textToSpeech(textToSpeak, selectedVoice);
         await audioUtils.playAudio(audioData, playbackSpeed);
       } catch (e) {
           console.error(e);
@@ -94,36 +82,77 @@ export default function App() {
       } finally {
           setIsLoading(false);
       }
-  }, [outputText, playbackSpeed, selectedVoice]);
+  }, [playbackSpeed, selectedVoice]);
 
   const handleSwapLanguages = () => {
-    const tempLang = sourceLang;
     setSourceLang(targetLang);
-    setTargetLang(tempLang);
+    setTargetLang(sourceLang);
     setInputText(outputText);
     setOutputText(inputText);
-    // Reset practice mode on swap
     setIsPracticing(false); 
     setPracticeFeedback(null);
   };
 
-  const handleMicClick = async () => {
+  const handleMicClick = () => {
+    setIsVoiceOverActive(false); // Ensure voice-over mode is off
     if (liveTranscriber.isRecording || liveTranscriber.isConnecting) {
       liveTranscriber.stopRecording();
     } else {
-      setInputText(''); // Clear previous text
+      setInputText('');
       liveTranscriber.startRecording();
     }
   };
+  
+  const handleVoiceOverClick = () => {
+    if (liveTranscriber.isRecording) {
+      liveTranscriber.stopRecording();
+    } else {
+      setInputText('');
+      setOutputText('');
+      setIsVoiceOverActive(true);
+      liveTranscriber.startRecording();
+    }
+  };
+  
+  const processVoiceOverTurn = useCallback(async () => {
+      const finalTranscript = liveTranscriber.transcript;
+      setIsVoiceOverActive(false);
+
+      if (!finalTranscript.trim()) {
+        liveTranscriber.resetTranscript();
+        return;
+      }
+      
+      setIsLoading(true);
+      setError(null);
+      try {
+        const translatedText = await translateText(finalTranscript, sourceLang.name, targetLang.name);
+        setOutputText(translatedText);
+        await handleSpeak(translatedText);
+      } catch (e) {
+        console.error(e);
+        setError("Voice-over failed. Please try again.");
+      } finally {
+        setIsLoading(false);
+        liveTranscriber.resetTranscript();
+      }
+  }, [sourceLang, targetLang, handleSpeak, liveTranscriber]);
+
+  useEffect(() => {
+    if (!liveTranscriber.isRecording && isVoiceOverActive) {
+        processVoiceOverTurn();
+    }
+  }, [liveTranscriber.isRecording, isVoiceOverActive, processVoiceOverTurn]);
+
 
   const handlePracticeClick = () => {
     setIsPracticing(true);
-    setPracticeFeedback(null); // Clear previous feedback
+    setPracticeFeedback(null);
   };
 
   const handleCancelPractice = () => {
       if(practiceRecorder.isRecording) {
-          practiceRecorder.stopRecording(); // Stop recording if active
+          practiceRecorder.stopRecording();
       }
       setIsPracticing(false);
       setPracticeFeedback(null);
@@ -145,15 +174,15 @@ export default function App() {
           }
       } else {
         setIsFetchingFeedback(false);
-        // Do not show an error if recording was empty, user might have misclicked.
       }
     } else {
-      setPracticeFeedback(null); // Clear old feedback before new recording
+      setPracticeFeedback(null);
       practiceRecorder.startRecording();
     }
   };
 
   return (
+    <>
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center p-4 sm:p-6 md:p-8 font-sans">
       <header className="w-full max-w-5xl text-center mb-8">
         <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">
@@ -182,15 +211,15 @@ export default function App() {
             onChange={(e) => setInputText(e.target.value)}
             placeholder="Enter text or start speaking..."
             onMicClick={handleMicClick}
-            isRecording={liveTranscriber.isRecording}
-            isTranscribing={liveTranscriber.isConnecting}
+            isRecording={liveTranscriber.isRecording && !isVoiceOverActive}
+            isTranscribing={liveTranscriber.isConnecting && !isVoiceOverActive}
             showMic
           />
           <TextInputPanel
             id="target-text"
             value={outputText}
             placeholder="Translation will appear here..."
-            onSpeakClick={handleSpeak}
+            onSpeakClick={() => handleSpeak(outputText)}
             readOnly
             showSpeaker
             isLoading={isLoading}
@@ -208,10 +237,14 @@ export default function App() {
             voices={ttsVoices}
             selectedVoice={selectedVoice}
             onVoiceChange={setSelectedVoice}
+            showVoiceOver={!isPracticing}
+            onVoiceOverClick={handleVoiceOverClick}
+            isVoiceOverActive={liveTranscriber.isRecording && isVoiceOverActive}
+            isVoiceOverConnecting={liveTranscriber.isConnecting && isVoiceOverActive}
           />
         </div>
 
-        <div className="flex justify-center mt-4">
+        <div className="flex justify-center mt-4 flex-wrap gap-4">
           <button
             onClick={handleTranslate}
             disabled={isLoading || !inputText.trim()}
@@ -219,6 +252,13 @@ export default function App() {
           >
             {isLoading ? <LoadingSpinner /> : 'Translate'}
             <ArrowIcon />
+          </button>
+           <button
+            onClick={() => setIsConversationMode(true)}
+            className="flex items-center justify-center gap-2 px-8 py-3 bg-cyan-600 rounded-lg font-semibold hover:bg-cyan-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            Start Conversation
+            <ConversationIcon />
           </button>
         </div>
 
@@ -232,5 +272,16 @@ export default function App() {
         <p className="text-gray-500 text-sm">Powered by Gemini API</p>
       </footer>
     </div>
+    {isConversationMode && (
+      <ConversationModal
+        isOpen={isConversationMode}
+        onClose={() => setIsConversationMode(false)}
+        sourceLang={sourceLang}
+        targetLang={targetLang}
+        selectedVoice={selectedVoice}
+        playbackSpeed={playbackSpeed}
+      />
+    )}
+    </>
   );
 }

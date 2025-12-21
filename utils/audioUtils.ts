@@ -1,8 +1,10 @@
 
 // A global AudioContext to avoid creating multiple instances
 let audioContext: AudioContext | null = null;
+
 const getAudioContext = (): AudioContext => {
-    if (!audioContext) {
+    // If the context doesn't exist or has been closed, create a new one.
+    if (!audioContext || audioContext.state === 'closed') {
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
             sampleRate: 24000,
         });
