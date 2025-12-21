@@ -11,6 +11,7 @@ interface TextInputPanelProps {
   placeholder: string;
   readOnly?: boolean;
   isMirrored?: boolean;
+  displayLang?: string;
   showMic?: boolean;
   isRecording?: boolean;
   isTranscribing?: boolean;
@@ -51,6 +52,7 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
   placeholder,
   readOnly = false,
   isMirrored = false,
+  displayLang,
   showMic = false,
   isRecording = false,
   isTranscribing = false,
@@ -85,7 +87,7 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
 }) => {
   const [isCopied, setIsCopied] = useState(false);
   const hasControls = showMic || showSpeaker || showPractice || showVoiceOver || isPracticing || showSaveButton || showSaveSnippetButton || showCopyButton;
-  const showControlBar = hasControls || (maxLength && !readOnly);
+  const showControlBar = hasControls || (maxLength && !readOnly) || (isMirrored && displayLang);
   const currentLength = value.length;
   const isNearingLimit = maxLength && currentLength > maxLength * 0.9;
   const isOverLimit = maxLength && currentLength > maxLength;
@@ -132,13 +134,17 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
             )}
 
             <div className="flex items-center justify-between flex-wrap gap-2">
-              {/* Left Side: Counter */}
-              <div className="flex-shrink-0">
-                  {maxLength && !readOnly && (
+              {/* Left Side: Counter or Language Name */}
+              <div className="flex-shrink-0 min-h-[1rem]">
+                {isMirrored && displayLang ? (
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2">
+                        {displayLang}
+                    </span>
+                  ) : maxLength && !readOnly ? (
                       <span className={`text-xs font-mono transition-colors ${isOverLimit ? 'text-red-500 font-bold' : isNearingLimit ? 'text-yellow-400' : 'text-gray-400'}`}>
                           {currentLength}/{maxLength}
                       </span>
-                  )}
+                  ) : null}
               </div>
               
               {/* Right Side: Buttons */}

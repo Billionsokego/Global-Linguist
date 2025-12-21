@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { LanguageSelector } from './components/LanguageSelector';
 import { TextInputPanel } from './components/TextInputPanel';
 import { LoadingSpinner } from './components/LoadingSpinner';
@@ -58,6 +58,9 @@ export default function App() {
   // New state for Instant Interpreter mode
   const [isVoiceOverActive, setIsVoiceOverActive] = useState(false);
 
+  const latestRequest = useRef(0);
+  const isTranslating = useRef(false);
+
   // Effect to save phrases to local storage whenever they change
   useEffect(() => {
     localStorage.setItem('linguist-phrasebook', JSON.stringify(savedPhrases));
@@ -85,12 +88,23 @@ export default function App() {
   }, [inputText, liveTranscriber.isRecording, liveTranscriber.isConnecting]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    // When user types, invalidate previous requests by incrementing the ref.
+    latestRequest.current++;
+    // If a translation was loading, stop the spinner immediately.
+    if (isLoading) {
+      setIsLoading(false);
+    }
     setInputText(e.target.value);
     setOutputText(''); // Clear previous translation to enable mirroring
   };
 
   const handleTranslate = useCallback(async () => {
-    if (!inputText.trim()) return;
+    // Guard against empty input or an existing translation request.
+    if (!inputText.trim() || isTranslating.current) return;
+
+    isTranslating.current = true;
+    const requestId = ++latestRequest.current;
+    
     setIsLoading(true);
     setError(null);
     setOutputText('');
@@ -98,14 +112,44 @@ export default function App() {
     setPracticeFeedback(null);
     try {
       const translated = await translateText(inputText, sourceLang.name, targetLang.name);
-      setOutputText(translated);
+      
+      // Only update the UI if this is the most recent request.
+      if (latestRequest.current === requestId) {
+        setOutputText(translated);
+      }
     } catch (e) {
       console.error(e);
-      setError('Failed to translate. Please try again.');
+      // Only show an error if it corresponds to the latest request.
+      if (latestRequest.current === requestId) {
+        setError('Failed to translate. Please try again.');
+      }
     } finally {
-      setIsLoading(false);
+      // Only turn off the loading spinner if this is the latest request.
+      if (latestRequest.current === requestId) {
+        setIsLoading(false);
+      }
+      isTranslating.current = false;
     }
   }, [inputText, sourceLang, targetLang]);
+
+  // Auto-translation with debounce
+  useEffect(() => {
+    // If there's no text to translate, or a voice-over session is active, do nothing.
+    if (!inputText.trim() || isVoiceOverActive) {
+      return;
+    }
+  
+    const debounceTimer = setTimeout(() => {
+      // This will be called 800ms after the user stops typing.
+      handleTranslate();
+    }, 800);
+  
+    // This cleanup function runs whenever inputText, sourceLang, etc. change.
+    // It clears the previous timer, preventing the translation from running prematurely.
+    return () => {
+      clearTimeout(debounceTimer);
+    };
+  }, [inputText, sourceLang, targetLang, isVoiceOverActive, handleTranslate]);
   
   const handleSpeak = useCallback(async (textToSpeak: string) => {
       if (!textToSpeak.trim()) return;
@@ -310,6 +354,7 @@ export default function App() {
             id="target-text"
             value={outputText || inputText}
             isMirrored={!outputText && !!inputText}
+            displayLang={targetLang.name}
             placeholder="Translation will appear here..."
             onSpeakClick={() => handleSpeak(outputText || inputText)}
             readOnly
