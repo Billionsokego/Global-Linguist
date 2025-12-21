@@ -91,3 +91,35 @@ export const getPronunciationFeedback = async (
         throw new Error('Failed to get pronunciation feedback from Gemini API.');
     }
 };
+
+export const transcribeAudio = async (
+    audioBase64: string,
+    language: string,
+): Promise<string> => {
+    try {
+        const audioPart = {
+            inlineData: {
+                mimeType: 'audio/webm',
+                data: audioBase64,
+            },
+        };
+
+        const textPart = {
+            text: `Transcribe the following audio recording. The speaker is speaking in ${language}. Provide only the raw text of the transcription, without any introductory phrases like "The transcription is:".`
+        };
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: { parts: [textPart, audioPart] },
+        });
+
+        if (response.text) {
+            return response.text.trim();
+        }
+
+        throw new Error('No text in Gemini transcription response');
+    } catch (error) {
+        console.error('Gemini transcription error:', error);
+        throw new Error('Failed to transcribe audio with Gemini API.');
+    }
+};

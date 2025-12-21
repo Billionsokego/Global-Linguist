@@ -5,8 +5,7 @@ import { TextInputPanel } from './components/TextInputPanel';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { languages } from './constants';
 import { Language } from './types';
-import { translateText, textToSpeech, getPronunciationFeedback } from './services/geminiService';
-import { useSpeechRecognition } from './hooks/useSpeechRecognition';
+import { translateText, textToSpeech, getPronunciationFeedback, transcribeAudio } from './services/geminiService';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { audioUtils } from './utils/audioUtils';
 
@@ -36,18 +35,13 @@ export default function App() {
   const [practiceFeedback, setPracticeFeedback] = useState<string | null>(null);
   const [isFetchingFeedback, setIsFetchingFeedback] = useState<boolean>(false);
 
-  const { transcript, isListening, startListening, stopListening, resetTranscript } = useSpeechRecognition({ lang: sourceLang.code });
+  // Audio Recording & Transcription State
   const { isRecording, startRecording, stopRecording } = useAudioRecorder();
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('linguist-app-input', inputText);
   }, [inputText]);
-
-  useEffect(() => {
-    if (transcript) {
-      setInputText(transcript);
-    }
-  }, [transcript]);
 
   const handleTranslate = useCallback(async () => {
     if (!inputText.trim()) return;
@@ -97,13 +91,27 @@ export default function App() {
     setPracticeFeedback(null);
   };
 
-  const handleMicClick = () => {
-    if (isListening) {
-        stopListening();
+  const handleMicClick = async () => {
+    if (isRecording) {
+      setIsTranscribing(true);
+      setError(null);
+      const audioBase64 = await stopRecording();
+      if (audioBase64) {
+        try {
+          const transcribedText = await transcribeAudio(audioBase64, sourceLang.name);
+          setInputText(transcribedText);
+        } catch (e) {
+          console.error(e);
+          setError('Failed to transcribe audio. Please try again.');
+        } finally {
+          setIsTranscribing(false);
+        }
+      } else {
+        setIsTranscribing(false);
+      }
     } else {
-        resetTranscript();
-        setInputText('');
-        startListening();
+      setInputText(''); // Clear previous text
+      startRecording();
     }
   };
 
@@ -173,7 +181,8 @@ export default function App() {
             onChange={(e) => setInputText(e.target.value)}
             placeholder={`Enter text in ${sourceLang.name}...`}
             onMicClick={handleMicClick}
-            isListening={isListening}
+            isRecording={isRecording}
+            isTranscribing={isTranscribing}
             showMic
           />
           <TextInputPanel

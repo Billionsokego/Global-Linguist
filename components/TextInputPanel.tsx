@@ -9,7 +9,8 @@ interface TextInputPanelProps {
   placeholder: string;
   readOnly?: boolean;
   showMic?: boolean;
-  isListening?: boolean;
+  isRecording?: boolean;
+  isTranscribing?: boolean;
   onMicClick?: () => void;
   showSpeaker?: boolean;
   isLoading?: boolean;
@@ -24,8 +25,8 @@ interface TextInputPanelProps {
   isFetchingFeedback?: boolean;
 }
 
-const MicIcon = ({ isListening }: { isListening: boolean }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-6 h-6 transition-colors ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-white'}`}>
+const MicIcon = ({ isRecording }: { isRecording: boolean }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-6 h-6 transition-colors ${isRecording ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-white'}`}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m12 0v-1.5a6 6 0 0 0-12 0v1.5m12 0v-1.5a6 6 0 0 0-12 0v1.5m0-6.75A.75.75 0 0 1 6 6h12a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-.75.75H6a.75.75 0 0 1-.75-.75V6.75Z" />
     </svg>
 );
@@ -55,7 +56,8 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
   placeholder,
   readOnly = false,
   showMic = false,
-  isListening = false,
+  isRecording = false,
+  isTranscribing = false,
   onMicClick,
   showSpeaker = false,
   isLoading = false,
@@ -97,15 +99,20 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
 
       <div className="absolute bottom-3 right-3 flex items-center gap-2">
         {showMic && onMicClick && (
-          <button onClick={onMicClick} className="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label={isListening ? 'Stop recording' : 'Start recording'}>
-            <MicIcon isListening={isListening} />
+          <button 
+            onClick={onMicClick} 
+            disabled={isTranscribing} 
+            className="p-2 rounded-full hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+            aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+          >
+            {isTranscribing ? <LoadingSpinner size="sm" /> : <MicIcon isRecording={isRecording} />}
           </button>
         )}
         
         {isPracticing ? (
             <>
                 <button onClick={onRecordPracticeClick} className="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label={isRecordingPractice ? 'Stop recording' : 'Record pronunciation'}>
-                    <MicIcon isListening={isRecordingPractice} />
+                    <MicIcon isRecording={isRecordingPractice} />
                 </button>
                  <button onClick={onCancelPracticeClick} className="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Cancel practice">
                     <CloseIcon />
