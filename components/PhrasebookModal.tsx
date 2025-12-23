@@ -17,7 +17,7 @@ export const PhrasebookModal: React.FC<PhrasebookModalProps> = ({ isOpen, onClos
 
   return (
     <div className="fixed inset-0 bg-gray-900/90 backdrop-blur-sm flex flex-col z-50 p-4 sm:p-6 md:p-8">
-      <div className="w-full max-w-2xl mx-auto bg-gray-800 rounded-xl border border-gray-700 flex flex-col h-full max-h-[90vh]">
+      <div className="w-full max-w-2xl mx-auto bg-gray-800 rounded-xl border border-gray-700 flex flex-col h-full max-h-[90dvh]">
         <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-700">
           <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">
             Phrasebook

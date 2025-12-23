@@ -5,7 +5,7 @@ import { TextInputPanel } from './components/TextInputPanel';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { languages, playbackSpeeds, ttsVoices, MAX_INPUT_LENGTH } from './constants';
 import { Language, SavedPhrase, SavedSnippet } from './types';
-import { translateText, textToSpeech, getPronunciationFeedback } from './services/geminiService';
+import { translateText, translateTextStream, textToSpeech, getPronunciationFeedback } from './services/geminiService';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { useLiveTranscription } from './hooks/useLiveTranscription';
 import { audioUtils } from './utils/audioUtils';
@@ -21,6 +21,7 @@ export default function App() {
   const [inputText, setInputText] = useState<string>(() => localStorage.getItem('linguist-app-input') || '');
   const [outputText, setOutputText] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
   // Modal states
@@ -59,7 +60,6 @@ export default function App() {
   const [isVoiceOverActive, setIsVoiceOverActive] = useState(false);
 
   const latestRequest = useRef(0);
-  const isTranslating = useRef(false);
 
   // Effect to save phrases to local storage whenever they change
   useEffect(() => {
@@ -90,69 +90,66 @@ export default function App() {
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     // When user types, invalidate previous requests by incrementing the ref.
     latestRequest.current++;
-    // If a translation was loading, stop the spinner immediately.
-    if (isLoading) {
-      setIsLoading(false);
-    }
     setInputText(e.target.value);
-    setOutputText(''); // Clear previous translation to enable mirroring
+    setOutputText(''); // Clear previous translation
   };
 
   const handleTranslate = useCallback(async () => {
-    // Guard against empty input or an existing translation request.
-    if (!inputText.trim() || isTranslating.current) return;
+    if (!inputText.trim()) return;
 
-    isTranslating.current = true;
     const requestId = ++latestRequest.current;
     
     setIsLoading(true);
+    setIsStreaming(true);
     setError(null);
     setOutputText('');
     setIsPracticing(false);
     setPracticeFeedback(null);
-    try {
-      const { translatedText, detectedSourceLanguage } = await translateText(inputText, sourceLang.name, targetLang.name);
-      
-      if (detectedSourceLanguage) {
-        const detectedLangObj = languages.find(lang => lang.name.toLowerCase() === detectedSourceLanguage.toLowerCase());
-        if (detectedLangObj) {
-            setSourceLang(detectedLangObj);
-        }
-      }
 
-      // Only update the UI if this is the most recent request.
-      if (latestRequest.current === requestId) {
-        setOutputText(translatedText);
+    try {
+      const stream = translateTextStream(inputText, sourceLang.name, targetLang.name);
+      
+      for await (const result of stream) {
+        if (latestRequest.current !== requestId) {
+          return; // A new request has started, so stop processing this one.
+        }
+
+        if (result.detectedSourceLanguage) {
+          const detectedLangObj = languages.find(lang => lang.name.toLowerCase() === result.detectedSourceLanguage!.toLowerCase());
+          if (detectedLangObj) {
+            setSourceLang(detectedLangObj);
+          }
+        }
+        if (result.chunk) {
+          setOutputText(prev => prev + result.chunk);
+        }
       }
     } catch (e: any) {
       console.error(e);
-      // Only show an error if it corresponds to the latest request.
       if (latestRequest.current === requestId) {
         setError(e.message || 'Failed to translate. Please try again.');
       }
     } finally {
-      // Only turn off the loading spinner if this is the latest request.
       if (latestRequest.current === requestId) {
         setIsLoading(false);
+        setIsStreaming(false);
       }
-      isTranslating.current = false;
     }
-  }, [inputText, sourceLang, targetLang]);
+  }, [inputText, sourceLang.name, targetLang.name]);
 
   // Auto-translation with debounce
   useEffect(() => {
-    // If there's no text to translate, or a voice-over session is active, do nothing.
     if (!inputText.trim() || isVoiceOverActive) {
+      latestRequest.current++; // Invalidate any ongoing stream
+      setIsStreaming(false);
+      setOutputText('');
       return;
     }
   
     const debounceTimer = setTimeout(() => {
-      // This will be called 800ms after the user stops typing.
       handleTranslate();
-    }, 800);
+    }, 500); // Shorter debounce for a more "real-time" feel
   
-    // This cleanup function runs whenever inputText, sourceLang, etc. change.
-    // It clears the previous timer, preventing the translation from running prematurely.
     return () => {
       clearTimeout(debounceTimer);
     };
@@ -178,12 +175,7 @@ export default function App() {
     if (sourceLang.code === 'auto' && !outputText) return;
     
     const newSource = targetLang;
-    // If source was 'Auto-detect', it becomes the language of the previous output.
-    // We find that from `outputText` which was translated *from* the original source.
-    // This is tricky. A simpler swap is just to swap the langs and the text.
-    // If sourceLang is 'auto', it should become what the targetLang is.
     const newTarget = sourceLang.code === 'auto' ? languages.find(l => l.name === targetLang.name) : sourceLang;
-
 
     setSourceLang(newSource);
     setTargetLang(newTarget || languages[0]); // fallback to auto-detect if something goes wrong
@@ -227,6 +219,7 @@ export default function App() {
       setIsLoading(true);
       setError(null);
       try {
+        // Voice-over uses the non-streaming translation for a complete response
         const { translatedText, detectedSourceLanguage } = await translateText(finalTranscript, sourceLang.name, targetLang.name);
         
         if (detectedSourceLanguage) {
@@ -379,15 +372,15 @@ export default function App() {
           />
           <TextInputPanel
             id="target-text"
-            value={outputText || inputText}
-            isMirrored={!outputText && !!inputText}
+            value={outputText}
+            isMirrored={isStreaming}
             displayLang={targetLang.name}
             placeholder="Translation will appear here..."
-            onSpeakClick={() => handleSpeak(outputText || inputText)}
+            onSpeakClick={() => handleSpeak(outputText)}
             readOnly
             showSpeaker
             isLoading={isLoading}
-            showPractice={!isPracticing && !!outputText}
+            showPractice={!isPracticing && !!outputText && !isStreaming}
             onPracticeClick={handlePracticeClick}
             onCancelPracticeClick={handleCancelPractice}
             isPracticing={isPracticing}
@@ -405,7 +398,7 @@ export default function App() {
             onVoiceOverClick={handleVoiceOverClick}
             isVoiceOverActive={liveTranscriber.isRecording && isVoiceOverActive}
             isVoiceOverConnecting={liveTranscriber.isConnecting && isVoiceOverActive}
-            showSaveButton={!!outputText && sourceLang.code !== 'auto'}
+            showSaveButton={!!outputText && sourceLang.code !== 'auto' && !isStreaming}
             onSavePhrase={handleSavePhrase}
             showSaveSnippetButton
             onSaveSnippet={handleOpenSaveSnippetModal}
@@ -417,28 +410,28 @@ export default function App() {
           <button
             onClick={handleTranslate}
             disabled={isLoading || !inputText.trim()}
-            className="flex items-center justify-center gap-2 px-8 py-3 bg-purple-600 rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg"
+            className="flex items-center justify-center gap-2 px-8 py-3 bg-purple-600 rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg w-full sm:w-auto"
           >
             {isLoading ? <LoadingSpinner /> : 'Translate'}
             <ArrowIcon />
           </button>
            <button
             onClick={() => setIsConversationMode(true)}
-            className="flex items-center justify-center gap-2 px-8 py-3 bg-cyan-600 rounded-lg font-semibold hover:bg-cyan-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg"
+            className="flex items-center justify-center gap-2 px-8 py-3 bg-cyan-600 rounded-lg font-semibold hover:bg-cyan-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg w-full sm:w-auto"
           >
             Start Conversation
             <ConversationIcon />
           </button>
            <button
             onClick={() => setIsPhrasebookOpen(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-700 rounded-lg font-semibold hover:bg-gray-600 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-700 rounded-lg font-semibold hover:bg-gray-600 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg w-full sm:w-auto"
           >
             Phrasebook
             <BookOpenIcon />
           </button>
            <button
             onClick={() => setIsSnippetsModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-700 rounded-lg font-semibold hover:bg-gray-600 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-700 rounded-lg font-semibold hover:bg-gray-600 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-lg w-full sm:w-auto"
           >
             Snippets
             <ClipboardDocumentListIcon />

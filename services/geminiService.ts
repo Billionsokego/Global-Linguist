@@ -28,6 +28,49 @@ const detectLanguage = async (text: string): Promise<string> => {
   }
 };
 
+export const translateTextStream = async function* (
+    text: string,
+    sourceLang: string,
+    targetLang: string
+): AsyncGenerator<{ chunk?: string, detectedSourceLanguage?: string }> {
+    let actualSourceLang = sourceLang;
+    let detectedSourceLanguage: string | null = null;
+
+    if (sourceLang === 'Auto-detect') {
+        if (!text.trim()) {
+            return;
+        }
+        try {
+            detectedSourceLanguage = await detectLanguage(text);
+            actualSourceLang = detectedSourceLanguage;
+            // Yield detected language once at the beginning
+            yield { detectedSourceLanguage };
+        } catch (error) {
+            console.error('Auto-detection failed:', error);
+            throw new Error('Could not auto-detect the language. Please select it manually.');
+        }
+    }
+
+    try {
+        const prompt = `Translate the following text from ${actualSourceLang} to ${targetLang}. Do not add any extra explanations, comments, or annotations. Just provide the raw translated text.\n\nText: "${text}"`;
+        
+        const response = await ai.models.generateContentStream({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+        });
+
+        for await (const chunk of response) {
+            if (chunk.text) {
+                // Yield subsequent chunks of translated text
+                yield { chunk: chunk.text };
+            }
+        }
+    } catch (error) {
+        console.error('Gemini translation stream error:', error);
+        throw new Error('Failed to stream translation with Gemini API.');
+    }
+};
+
 export const translateText = async (
   text: string,
   sourceLang: string,

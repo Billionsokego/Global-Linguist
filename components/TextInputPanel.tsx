@@ -104,7 +104,7 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
 
 
   return (
-    <div className="w-full min-h-64 bg-gray-800 rounded-lg border border-gray-700 flex flex-col overflow-hidden">
+    <div className="w-full min-h-[30vh] sm:min-h-64 bg-gray-800 rounded-lg border border-gray-700 flex flex-col overflow-hidden">
       <textarea
         id={id}
         value={value}
@@ -153,7 +153,7 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
                   <button 
                     onClick={onMicClick} 
                     disabled={isTranscribing || isRecording} 
-                    className="p-2 rounded-full hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                    className="p-2.5 rounded-full hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
                     aria-label={isRecording ? 'Stop recording' : 'Start recording'}
                   >
                     {isTranscribing ? <LoadingSpinner size="sm" /> : <MicIcon isRecording={isRecording} />}
@@ -162,10 +162,10 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
                 
                 {isPracticing ? (
                     <>
-                        <button onClick={onRecordPracticeClick} className="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label={isRecordingPractice ? 'Stop recording' : 'Record pronunciation'}>
+                        <button onClick={onRecordPracticeClick} className="p-2.5 rounded-full hover:bg-gray-700 transition-colors" aria-label={isRecordingPractice ? 'Stop recording' : 'Record pronunciation'}>
                             <MicIcon isRecording={isRecordingPractice} />
                         </button>
-                        <button onClick={onCancelPracticeClick} className="p-2 rounded-full hover:bg-gray-700 transition-colors" aria-label="Cancel practice">
+                        <button onClick={onCancelPracticeClick} className="p-2.5 rounded-full hover:bg-gray-700 transition-colors" aria-label="Cancel practice">
                             <CloseIcon />
                         </button>
                     </>
@@ -202,38 +202,38 @@ export const TextInputPanel: React.FC<TextInputPanelProps> = ({
                                   ))}
                               </div>
                             )}
-                            <button onClick={onSpeakClick} disabled={isLoading || !value} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Speak translation">
+                            <button onClick={onSpeakClick} disabled={isLoading || !value} className="p-2.5 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Speak translation">
                               {isLoading ? <LoadingSpinner size="sm"/> : <SpeakerIcon />}
                             </button>
                           </div>
                         )}
                         
                         {showVoiceOver && onVoiceOverClick && (
-                          <button onClick={onVoiceOverClick} disabled={isLoading || isRecording} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Instant Interpreter">
+                          <button onClick={onVoiceOverClick} disabled={isLoading || isRecording} className="p-2.5 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Instant Interpreter">
                                 {isVoiceOverConnecting ? <LoadingSpinner size="sm"/> : <VoiceOverIcon isActive={isVoiceOverActive}/>}
                             </button>
                         )}
                         
                         {showCopyButton && (
-                           <button onClick={handleCopy} disabled={!value} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Copy text">
+                           <button onClick={handleCopy} disabled={!value} className="p-2.5 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Copy text">
                                {isCopied ? <CheckIcon /> : <ClipboardIcon />}
                            </button>
                         )}
 
                         {showSaveButton && onSavePhrase && (
-                           <button onClick={onSavePhrase} disabled={!value} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Save to phrasebook">
+                           <button onClick={onSavePhrase} disabled={!value} className="p-2.5 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Save to phrasebook">
                                <BookmarkIcon />
                            </button>
                         )}
                         
                         {showSaveSnippetButton && onSaveSnippet && (
-                           <button onClick={() => onSaveSnippet(value)} disabled={!value} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Save as snippet">
+                           <button onClick={() => onSaveSnippet(value)} disabled={!value} className="p-2.5 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Save as snippet">
                                <BookmarkSquareIcon />
                            </button>
                         )}
 
                         {showPractice && onPracticeClick && (
-                          <button onClick={onPracticeClick} disabled={isLoading || !value || isRecording} className="p-2 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Practice pronunciation">
+                          <button onClick={onPracticeClick} disabled={isLoading || !value || isRecording} className="p-2.5 rounded-full hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" aria-label="Practice pronunciation">
                                 <PracticeIcon />
                             </button>
                         )}
